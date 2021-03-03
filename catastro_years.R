@@ -1,12 +1,13 @@
-# Cuadros valor bruto de la producción estatales
-# Datos de los Censos Económicos 2019
+#Análisis de datos del catastro de la CDMX
+#Fuente: https://sig.cdmx.gob.mx/datos/
+
 
 # Librerías ====
 if(!require('pacman')) install.packages('pacman')
 pacman::p_load(tidyverse, kableExtra)
 
 # Parámetros previos ====
-url<-"https://sig.cdmx.gob.mx/documents/"
+url<-"https://sig.cdmx.gob.mx/documents"
 
 # User defined functions ====
 descarga_y_unzip <- function(index_archivo) {
