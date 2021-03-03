@@ -1,84 +1,62 @@
-#Cuadros valor bruto de la producción estatales
-#Datos de los Censos Económicos 2019
+# Cuadros valor bruto de la producción estatales
+# Datos de los Censos Económicos 2019
 
-
-##Borrar datos del entorno
-rm(list=ls())
-
-##Crear folders de almacenamiento
-dir.create("catastro")
-
-
+# Librerías ====
 if(!require('pacman')) install.packages('pacman')
 pacman::p_load(tidyverse, kableExtra)
 
-
-##Url general de los Censos económicos 2019
-
+# Parámetros previos ====
 url<-"https://sig.cdmx.gob.mx/documents/"
 
-#Crear consecutivo del 75 al 90  (números ocupados por la ADIP para identificar a la descarga)
-
-lista<-(75:90)
-
-##Descargar y extrar los datos para las 32 entidades federativas
-for (i in seq_along(lista)) {  
-  
-  ##Descargar
-  temp<-tempfile()
-  download.file(paste0(url,lista[i],"/download"),
-                mode="wb",
-                destfile = temp)
-  
-
-  
-  ##Extraer
-  unzip(temp,
-        exdir = "catastro")
-  unlink(temp)
-  
+# User defined functions ====
+descarga_y_unzip <- function(index_archivo) {
+ temp <- tempfile()
+  download.file(glue::glue("{url}/{index_archivo}/download"),
+    mode = "wb",
+    destfile = temp)
+  unzip(temp, exdir = "catastro") 
+  unlink(temp) 
 }
 
 
+# Lectura y limpieza de datos ====
+# Descarga masiva
+walk(75:90,  ~ descarga_y_unzip(.x))
+archivos <- list.files(path = "catastro", pattern = "sig_cdmx_")
+
+# Parse del directorio
+catastro <- purrr::map_dfr(
+  archivos,
+  ~ data.table::fread(glue::glue("catastro/{.x}"), na.strings = "*") %>%
+    tibble() %>% 
+    select(fid, geo_shape,
+           colonia_predio,
+          uso_construccion,
+          anio_construccion,
+          alcaldia_cumplimiento) %>%
+    # Filtrar por sector
+    filter(uso_construccion == "Habitacional" |
+             uso_construccion == "Habitacional y comercial")
+)
+
+# Limpieza                    
+catastro <- catastro %>% 
+  mutate(anio_construccion = na_if(anio_construccion, 0))%>%
+ # Eliminar observaciones con NAs y año de construcción menor a 1900
+ filter(anio_construccion>=1900 )
 
 
-#Lectura y limpieza de datos====
-archivos<-list.files(path = "catastro", 
-                        pattern = "sig_cdmx_")
+# Parámetros de anotaciones en la gráfica
+media <- format(round(mean(catastro$anio_construccion), 0))
+debajom <- catastro %>%
+  filter(anio_construccion < 1989) %>%
+  nrow()
+total <- nrow(catastro)
+pct <- format(round(debajom / total * 100, 1))
 
-
-catastro<-purrr::map(archivos,
-                    ~ read_csv(glue::glue("catastro/{.x}"), 
-                               na = "*",col_types = cols(.default = "c"))%>%
-                       select(fid,geo_shape,
-                             colonia_predio,
-                             uso_construccion,
-                             anio_construccion,
-                             alcaldia_cumplimiento)%>%
-                      #Filtrar por sector
-                      filter(uso_construccion=="Habitacional" |
-                               uso_construccion=="Habitacional y comercial"))
-                      
-
-##Se transforma la lista a dataframe                      
-catastro<-catastro%>%
-map_df(as_tibble)%>%
-  mutate(anio_construccion=as.numeric(anio_construccion))%>%
-  mutate(anio_construccion=ifelse(anio_construccion==0,NA,
-                                  anio_construccion))%>%
-#Eliminar observaciones con NAs y año de construcción menor a 1900
-filter(anio_construccion>=1900 )
-
-
-##Datos para anotaciones en la gráfica
-media<-format(round(mean(catastro$anio_construccion),0))
-debajom<-catastro%>%filter(anio_construccion<1989)%>%nrow()
-total<-nrow(catastro)
-pct<-format(round(debajom/total*100,1))
-
-
+# Vizs y tablas ====
 ##Gráfica CDMX
-  catastro%>%
+catastro%>%
 ggplot(., aes(x=anio_construccion, color=uso_construccion,
               fill=uso_construccion)) +
     geom_histogram(alpha=0.3,
@@ -138,9 +116,7 @@ Agencia Digital de Innovación Pública (ADIP). Sistema Abierto de Información 
         plot.caption = element_text(hjust = 0,size=12),
         legend.position = "bottom",
         axis.text.x = element_text(angle = 90, vjust = 0.5),
-        text=element_text(size=20))
-  
-  
+        text=element_text(size=20)) +
   ggsave("catastro/graf1.png", height=10, width=20, units='in', dpi=300)
   
   
